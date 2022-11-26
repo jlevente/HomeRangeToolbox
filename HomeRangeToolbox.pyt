@@ -116,10 +116,7 @@ class HomeRangeKDE_Batch(object):
 
         obs_path = arcpy.Describe(params['observations']).catalogPath
 
-        arcpy.AddMessage(arcpy.Describe(parameters[0].valueAsText).name)
-        arcpy.AddMessage(parameters)
-
-        param_values['out_folder'] = param_values['out_folder'].replace('\\', '\\\\')
+        param_values['out_folder'] = param_values['out_folder'].replace('\\', '/')
         os.makedirs(param_values['out_folder'], exist_ok=True)
         arcpy.env.workspace = param_values['out_folder']
         arcpy.AddMessage("Outputs will be saved in %s" % (param_values['out_folder']))
@@ -127,8 +124,6 @@ class HomeRangeKDE_Batch(object):
         individuals = []
 
         # Get absolute path of observations
-        obs_path = arcpy.Describe(params['observations'].valueAsText).catalogPath
-        arcpy.AddMessage(arcpy.Describe(parameters[0]))
         
         with arcpy.da.SearchCursor(obs_path, param_values['animal_id']) as cursor:
             for row in cursor:
@@ -140,12 +135,12 @@ class HomeRangeKDE_Batch(object):
         i = 0
         for animal in individuals:
             i += 1
-            if i % 10 == 0:
+            if i % 2 == 0:
                 arcpy.AddMessage("%s/%s individuals done." % (i, len(individuals)))
                 break
 
             tmp_points = r'animal.shp'
-            tmp_raster_points =  'raster_values.shp'
+            tmp_raster_points =  r'raster_values.shp'
           
             where_txt = '"%s" = \'%s\'' % (param_values['animal_id'], animal)
            
@@ -167,8 +162,7 @@ class HomeRangeKDE_Batch(object):
             # Extract home ranges and core areas
             value_list = []
 
-            arcpy.AddMessage("%s \n %s \n %s" % (tmp_points_path, out_raster_name, tmp_raster_points))
-            arcpy.sa.ExtractValuesToPoints(tmp_points_path, out_raster_name, 'C:/Users/Levente Juhasz/projects/tmp/tmpdata/raster_values.shp')
+            arcpy.sa.ExtractValuesToPoints(tmp_points_path, out_raster_name, tmp_raster_points)
             with arcpy.da.SearchCursor(tmp_raster_points, 'RASTERVALU') as cursor:
                 for val in cursor:
                     value_list.append(val[0])
@@ -199,6 +193,9 @@ class HomeRangeKDE_Batch(object):
 
             arcpy.RasterToPolygon_conversion(home_raster, 'home_range_' + animal + '.shp', 'SIMPLIFY', 'Value')
             arcpy.RasterToPolygon_conversion(core_raster, 'core_' + animal + '.shp', 'SIMPLIFY', 'Value')
+
+            arcpy.Delete_management(tmp_points)
+            arcpy.Delete_management(tmp_raster_points)
 
         arcpy.AddMessage("All done.")
         return
