@@ -114,16 +114,21 @@ class HomeRangeKDE_Batch(object):
             param_values[param.name] = param.valueAsText
             params[param.name] = param
 
+        obs_path = arcpy.Describe(params['observations']).catalogPath
+
+        arcpy.AddMessage(arcpy.Describe(parameters[0].valueAsText).name)
+        arcpy.AddMessage(parameters)
 
         param_values['out_folder'] = param_values['out_folder'].replace('\\', '\\\\')
-        arcpy.env.workspace = param_values['out_folder']
         os.makedirs(param_values['out_folder'], exist_ok=True)
+        arcpy.env.workspace = param_values['out_folder']
         arcpy.AddMessage("Outputs will be saved in %s" % (param_values['out_folder']))
 
         individuals = []
 
         # Get absolute path of observations
         obs_path = arcpy.Describe(params['observations'].valueAsText).catalogPath
+        arcpy.AddMessage(arcpy.Describe(parameters[0]))
         
         with arcpy.da.SearchCursor(obs_path, param_values['animal_id']) as cursor:
             for row in cursor:
@@ -139,8 +144,8 @@ class HomeRangeKDE_Batch(object):
                 arcpy.AddMessage("%s/%s individuals done." % (i, len(individuals)))
                 break
 
-            tmp_points = 'animal.shp'
-            tmp_raster_points =  param_values['out_folder'] + r'\\raster_values.shp'
+            tmp_points = r'animal.shp'
+            tmp_raster_points =  'raster_values.shp'
           
             where_txt = '"%s" = \'%s\'' % (param_values['animal_id'], animal)
            
@@ -156,33 +161,37 @@ class HomeRangeKDE_Batch(object):
 
             out_raster_name = "kde_%s.tif" % animal
             raster.save(out_raster_name)
+            arcpy.management.CalculateStatistics(out_raster_name)
             out_raster_path = arcpy.Describe(out_raster_name).catalogPath
 
             # Extract home ranges and core areas
             value_list = []
 
-            arcpy.AddMessage("%s \n %s \n %s" % (tmp_points_path, out_raster_path, tmp_raster_points))
-            arcpy.sa.ExtractValuesToPoints(tmp_points_path, out_raster_path, tmp_raster_points)
+            arcpy.AddMessage("%s \n %s \n %s" % (tmp_points_path, out_raster_name, tmp_raster_points))
+            arcpy.sa.ExtractValuesToPoints(tmp_points_path, out_raster_name, 'C:/Users/Levente Juhasz/projects/tmp/tmpdata/raster_values.shp')
             with arcpy.da.SearchCursor(tmp_raster_points, 'RASTERVALU') as cursor:
                 for val in cursor:
                     value_list.append(val[0])
 
+            value_list.sort(reverse=True)
             num_records = len(value_list)
 
             home_cutoff = int(num_records * 0.5)
             core_cutoff = int(num_records * 0.95)
 
-            home_values = value_list[home_cutoff - 1]
-            core_values = value_list[core_cutoff - 1]
+            home_cutoff_value = value_list[home_cutoff - 1]
+            core_cutoff_value = value_list[core_cutoff - 1]
 
             max_kernel_value = arcpy.GetRasterProperties_management(out_raster_name, 'MAXIMUM')
 
             # Reclass expression format: min_value max_value RECLASS_VALUE (separated by ;)
-            reclass_expression_home = '0 %s NODATA; %s %s %s' % (home_cutoff, home_cutoff, max_kernel_value, animal)
-            reclass_expression_core = '0 %s NODATA; %s %s %s' % (core_cutoff, core_cutoff, max_kernel_value, animal)
+            reclass_expression_home = '0 %s NODATA; %s %s %s' % (home_cutoff_value, home_cutoff_value, max_kernel_value, 1)
+            reclass_expression_core = '0 %s NODATA; %s %s %s' % (core_cutoff_value, core_cutoff_value, max_kernel_value, 1)
 
-            home_raster = arcpy.sa.Reclassify(out_raster_name, 'Value', reclass_expression_home, 'DATA')
-            core_raster = arcpy.sa.Reclassify(out_raster_name, 'Value', reclass_expression_core, 'DATA')
+            arcpy.AddMessage(reclass_expression_core)
+
+            home_raster = arcpy.sa.Reclassify(out_raster_path, 'Value', reclass_expression_home, 'DATA')
+            core_raster = arcpy.sa.Reclassify(out_raster_path, 'Value', reclass_expression_core, 'DATA')
 
 
             home_raster.save('home_raster_' + animal + '.tif')
@@ -235,3 +244,11 @@ class HomeRangeMCP(object):
         added to the display."""
         return
 
+# def main():
+#     tbx = Toolbox()
+
+#     test_tool = HomeRangeKDE_Batch()
+#     test_tool.execute(test_tool.getParameterInfo(), None)
+
+# if __name__ == '__main__':
+#     main()
