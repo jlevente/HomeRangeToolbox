@@ -257,7 +257,7 @@ class HomeRangeKDE_Batch(object):
         i = 0
         for animal in individuals:
             i += 1
-            if i % 2 == 0:
+            if i % 4 == 0:
                 arcpy.AddMessage("%s/%s individuals done." % (i, len(individuals)))
                 break
 
@@ -268,14 +268,25 @@ class HomeRangeKDE_Batch(object):
             arcpy.Select_analysis(obs_path, tmp_points, where_clause=where_txt)
             tmp_points_path = arcpy.Describe(tmp_points).catalogPath
 
+
+            # Check and set up parameters
             if params['barrier_features'].value:
                 barrier_path = arcpy.Describe(params['barrier_features'].valueAsText).catalogPath
-                processor.compute_utilization(arcpy, point_fc=tmp_points_path, suffix=animal, barrier_features=barrier_path,\
-                                             cell_size=params['out_cell_size'].valueAsText, search_radius=params['search_radius'].valueAsText)
             else:
-                print('e')
-                processor.compute_utilization(arcpy, point_fc=tmp_points_path, suffix=animal, barrier_features=None, \
-                                            cell_size=params['out_cell_size'].valueAsText, search_radius=params['search_radius'].valueAsText)
+                barrier_path = None
+
+            out_cell_size = params['out_cell_size'].valueAsText
+
+            if params['search_radius'].value:
+                bandwidth = params['search_radius'].valueAsText
+            else:
+                coord_cursor = arcpy.da.SearchCursor(tmp_points_path, ["SHAPE@XY"])
+                bandwidth = processor.calculate_optimized_bandwidth(coord_cursor)
+                arcpy.AddMessage('Optimal bandwidth: %s' % bandwidth)
+
+            processor.compute_utilization(arcpy, point_fc=tmp_points_path, suffix=animal, barrier_features=barrier_path, \
+                                            cell_size=out_cell_size, search_radius=bandwidth)
+
 
         arcpy.AddMessage("All done.")
         return
@@ -383,25 +394,56 @@ class HomeRangeCalc(object):
         arcpy.Delete_management(out_raster_path)
         arcpy.Delete_management(tmp_raster_points)
         # Do not delete point feature class if not called from within a loop (i.e. suffix is None)
-        if suffix:
-            arcpy.Delete_management(point_fc)
+        #if suffix:
+        #    arcpy.Delete_management(point_fc)
 
-    def sd(self, coord_list):
-        mean = sum(coord_list) / len(coord_list)
-        variance = sum([((x - mean) ** 2) for x in coord_list]) / len(coord_list)
-        sd = variance ** 0.5
+    # This function extracts lists of x and y coordinates from a search cursor,
+    # then returns and optimized bandwidth value for those observations
+    # based on XXX
+    def calculate_reference_bandwidth(self, search_cursor):
+        import math
+        import statistics
 
-        return sd
+        x_list = []
+        y_list = []
 
-    def calculate_optimized_bandwidth(self, x_list, y_list):
-        sd_x = self.sd(x_list)
-        sd_y = self.sd(y_list)
+        for feature in search_cursor:
+            x, y = feature[0]
+            x_list.append(x)
+            y_list.append(y)
 
-        h = (0.5 * (sd_x + sd_y)) * len(x_list)^(-1/6)
+        mean_x = sum(x_list) / len(x_list)
+        mean_y = sum(y_list) / len(y_list)
+        n = len(x_list)
+
+        distances = []
+        for i in range(len(x_list)):
+            sq_dist = ((x_list[i] - mean_x) ** 2)  + ((y_list[i] - mean_y) ** 2)
+            distances.append(sq_dist)
+
+        st_dist = math.sqrt(sum(distances) / n)
+        d_m = math.sqrt(1/math.log(2)) * math.sqrt(statistics.median(distances))
+
+
+        if st_dist < d_m:
+            A = st_dist
+        else:
+            A = d_m
+
+        h = 0.9 * A * len(x_list) ** (-1/5)
 
         return h
 
+    def calculate_lscv_bandwidth(self, search_cursor):
+        x_list = []
+        y_list = []
 
+        for feature in search_cursor:
+            x, y = feature[0]
+            x_list.append(x)
+            y_list.append(y)
+
+        h_ref = self.calculate_reference_bandwidth(search_cursor)
 
 
 # def main():
