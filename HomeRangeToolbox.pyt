@@ -199,6 +199,29 @@ class HomeRangeKDE_Batch(object):
             enabled=False
         )
 
+        home_cutoff = arcpy.Parameter(
+            displayName="Home cutoff percentage",
+            name="home_cutoff",
+            datatype="Double",
+            parameterType="Required",
+            direction="Input"
+        )
+        home_cutoff.filter.type = "Range"
+        home_cutoff.filter.list = [0, 100]
+        home_cutoff.value = 50.0
+
+        core_cutoff = arcpy.Parameter(
+            displayName="Core area cutoff percentage",
+            name="core_cutoff",
+            datatype="Double",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        core_cutoff.filter.type = "Range"
+        core_cutoff.filter.list = [0, 100]
+        core_cutoff.value = 95
+
         out_cell_size = arcpy.Parameter(
             displayName="Output cell size",
             name="out_cell_size",
@@ -215,7 +238,7 @@ class HomeRangeKDE_Batch(object):
             direction="Output"
         )
 
-        params = [observations, animal_id, barrier_features, radius_method, search_radius, out_cell_size, out_folder]
+        params = [observations, animal_id, barrier_features, radius_method, search_radius, home_cutoff, core_cutoff, out_cell_size, out_folder]
         return params
 
     def isLicensed(self):
@@ -293,6 +316,8 @@ class HomeRangeKDE_Batch(object):
                 barrier_path = None
 
             out_cell_size = params['out_cell_size'].valueAsText
+            home_cutoff = params['home_cutoff'].valueAsText
+            core_cutoff = params['core_cutoff'].valueAsText
 
             if params['radius_method'].valueAsText == 'Reference bandwidth (Silverman 1986)':
                 coord_cursor = arcpy.da.SearchCursor(tmp_points_path, ["SHAPE@XY"])
@@ -307,7 +332,8 @@ class HomeRangeKDE_Batch(object):
                 arcpy.AddMessage('Bandwidth set manually: %s' % bandwidth)
 
             processor.compute_utilization(arcpy, point_fc=tmp_points_path, suffix=animal, barrier_features=barrier_path, \
-                                            cell_size=out_cell_size, search_radius=bandwidth)
+                                            cell_size=out_cell_size, search_radius=bandwidth, home_cutoff=home_cutoff, \
+                                            core_cutoff=core_cutoff)
 
         arcpy.AddMessage("All done.")
         return
@@ -355,7 +381,7 @@ class HomeRangeMCP(object):
 
 # Class that contains the functionality
 class HomeRangeCalc(object):
-    def compute_utilization(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius):
+    def compute_utilization(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius, home_cutoff, core_cutoff):
         # Build KDE raster
         if barrier_features:
             raster = arcpy.sa.KernelDensity(point_fc, None, cell_size, search_radius, in_barriers=barrier_path)
@@ -383,8 +409,8 @@ class HomeRangeCalc(object):
         value_list.sort(reverse=True)
         num_records = len(value_list)
 
-        home_cutoff = int(num_records * 0.5)
-        core_cutoff = int(num_records * 0.95)
+        home_cutoff = int(num_records * float(home_cutoff)/100.0)
+        core_cutoff = int(num_records * float(core_cutoff)/100.0)
 
         home_cutoff_value = value_list[home_cutoff - 1]
         core_cutoff_value = value_list[core_cutoff - 1]
