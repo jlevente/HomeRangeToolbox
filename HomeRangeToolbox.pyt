@@ -188,14 +188,15 @@ class HomeRangeKDE_Batch(object):
                 multiValue=False)
 
         radius_method.filter.type = "ValueList"
-        radius_method.filter.list = ['Reference bandwidth  (Silverman 1986)', 'Least Squares Cross Validation  (Seaman & Powell 1996)', 'Manual']
+        radius_method.filter.list = ['Reference bandwidth (Silverman 1986)', 'Least Squares Cross Validation (Seaman & Powell 1996)', 'Manual']
 
         search_radius = arcpy.Parameter(
             displayName="Manual Search radius",
             name="search_radius",
             datatype="Double",
             parameterType="Optional",
-            direction="Input"
+            direction="Input",
+            enabled=False
         )
 
         out_cell_size = arcpy.Parameter(
@@ -225,6 +226,11 @@ class HomeRangeKDE_Batch(object):
         """Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
         has been changed."""
+
+        if parameters[3].value == 'Manual':
+            parameters[4].enabled = True
+        else:
+            parameters[4].enabled = False
         return
 
     def updateMessages(self, parameters):
@@ -288,16 +294,20 @@ class HomeRangeKDE_Batch(object):
 
             out_cell_size = params['out_cell_size'].valueAsText
 
-            if params['search_radius'].value:
-                bandwidth = params['search_radius'].valueAsText
-            else:
+            if params['radius_method'].valueAsText == 'Reference bandwidth (Silverman 1986)':
                 coord_cursor = arcpy.da.SearchCursor(tmp_points_path, ["SHAPE@XY"])
                 bandwidth = processor.calculate_reference_bandwidth(coord_cursor)
-                arcpy.AddMessage('Optimal bandwidth: %s' % bandwidth)
+                arcpy.AddMessage('Reference bandwidth based on Silverman 1986: %s' % bandwidth)
+            elif params['radius_method'].valueAsText == 'Least Squares Cross Validation (Seaman & Powell 1996)':
+                coord_cursor = arcpy.da.SearchCursor(tmp_points_path, ["SHAPE@XY"])
+                bandwidth = processor.calculate_lscv_bandwidth(coord_cursor)
+                arcpy.AddMessage('LSCV bandwidth based on on Seaman & Powell 1996: %s' % bandwidth)
+            elif params['radius_method'].valueAsText == 'Manual':
+                bandwidth = params['search_radius'].valueAsText
+                arcpy.AddMessage('Bandwidth set manually: %s' % bandwidth)
 
             processor.compute_utilization(arcpy, point_fc=tmp_points_path, suffix=animal, barrier_features=barrier_path, \
                                             cell_size=out_cell_size, search_radius=bandwidth)
-
 
         arcpy.AddMessage("All done.")
         return
@@ -464,6 +474,7 @@ class HomeRangeCalc(object):
 
         n = len(x_list)
 
+        search_cursor.reset()
         h_ref = self.calculate_reference_bandwidth(search_cursor)
         min_h = h_ref * 0.1
         max_h = h_ref * 2
@@ -483,6 +494,7 @@ class HomeRangeCalc(object):
             x = 1.0 / (math.pi * h * h * n) + (2 * out - 3 * n)/(math.pi * 4.0 * h * h * n * n)
             res.append(x)
 
+        res = numpy.array(res)
         h_value = value_range[res.argmin()]
         return h_value
 
