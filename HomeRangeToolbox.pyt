@@ -179,8 +179,19 @@ class HomeRangeKDE_Batch(object):
             direction="Input"
         )
 
+        radius_method = arcpy.Parameter(
+                displayName='Bandwidth calculation method', 
+                name='radius_method', 
+                datatype='GPString', 
+                parameterType='Optional', 
+                direction="Input", 
+                multiValue=False)
+
+        radius_method.filter.type = "ValueList"
+        radius_method.filter.list = ['Reference bandwidth  (Silverman 1986)', 'Least Squares Cross Validation  (Seaman & Powell 1996)', 'Manual']
+
         search_radius = arcpy.Parameter(
-            displayName="Search radius",
+            displayName="Manual Search radius",
             name="search_radius",
             datatype="Double",
             parameterType="Optional",
@@ -203,7 +214,7 @@ class HomeRangeKDE_Batch(object):
             direction="Output"
         )
 
-        params = [observations, animal_id, barrier_features, search_radius, out_cell_size, out_folder]
+        params = [observations, animal_id, barrier_features, radius_method, search_radius, out_cell_size, out_folder]
         return params
 
     def isLicensed(self):
@@ -281,7 +292,7 @@ class HomeRangeKDE_Batch(object):
                 bandwidth = params['search_radius'].valueAsText
             else:
                 coord_cursor = arcpy.da.SearchCursor(tmp_points_path, ["SHAPE@XY"])
-                bandwidth = processor.calculate_optimized_bandwidth(coord_cursor)
+                bandwidth = processor.calculate_reference_bandwidth(coord_cursor)
                 arcpy.AddMessage('Optimal bandwidth: %s' % bandwidth)
 
             processor.compute_utilization(arcpy, point_fc=tmp_points_path, suffix=animal, barrier_features=barrier_path, \
@@ -435,15 +446,47 @@ class HomeRangeCalc(object):
         return h
 
     def calculate_lscv_bandwidth(self, search_cursor):
+        from scipy.spatial import distance_matrix
+        import numpy as np
+        import math
+
+        ITER = 100
+
         x_list = []
         y_list = []
+        coords = []
 
         for feature in search_cursor:
             x, y = feature[0]
+            coords.append(feature[0])
             x_list.append(x)
             y_list.append(y)
 
+        n = len(x_list)
+
         h_ref = self.calculate_reference_bandwidth(search_cursor)
+        min_h = h_ref * 0.1
+        max_h = h_ref * 2
+
+        step = (max_h - min_h) / ITER
+
+        value_range = [min_h + step * x for x in list(range(0,ITER+1))]
+
+        f = distance_matrix(coords, coords)
+        f = np.tril(f, k=-1) # keep lower triangle, no diagonal
+        f_flat = f.flatten(order='F') # flatten matrix Fortran style (column major)
+        f_flat = np.array([x for x in f_flat if x > 0])
+
+        res = []
+        for h in value_range:
+            out = sum(numpy.exp(-f_flat * f_flat / (4 * h * h)) - 4 * numpy.exp(-f_flat * f_flat / (2 * h * h)))
+            x = 1.0 / (math.pi * h * h * n) + (2 * out - 3 * n)/(math.pi * 4.0 * h * h * n * n)
+            res.append(x)
+
+        h_value = value_range[res.argmin()]
+        return h_value
+
+
 
 
 # def main():
