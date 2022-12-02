@@ -345,9 +345,9 @@ class HomeRangeKDE_Batch(object):
         i = 0
         for animal in individuals:
             i += 1
-            if i % 4 == 0:
+            if i % 5 == 0:
                 arcpy.AddMessage("%s/%s individuals done." % (i, len(individuals)))
-                break
+                #break
 
             tmp_points = r'animal.shp'
                       
@@ -599,9 +599,9 @@ class HomeRangeMCP_Batch(object):
         i = 0
         for animal in individuals:
             i += 1
-            if i % 4 == 0:
+            if i % 5 == 0:
                 arcpy.AddMessage("%s/%s individuals done." % (i, len(individuals)))
-                break
+                #break
 
             tmp_points = r'animal.shp'
 
@@ -624,7 +624,7 @@ class HomeRangeCalc(object):
     def compute_kde(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius, home_cutoff, core_cutoff):
         # Build KDE raster
         if barrier_features:
-            raster = arcpy.sa.KernelDensity(point_fc, None, cell_size, search_radius, in_barriers=barrier_path)
+            raster = arcpy.sa.KernelDensity(point_fc, None, cell_size, search_radius, in_barriers=barrier_features)
         else:
             raster = arcpy.sa.KernelDensity(point_fc, None, cell_size, search_radius)
 
