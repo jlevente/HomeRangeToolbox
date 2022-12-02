@@ -27,7 +27,7 @@ intersphinx_disabled_domains = ['std']
 
 templates_path = ['_templates']
 
-include_patterns = ['**']
+include_patterns = ['**', '../../*']
 
 # -- Options for HTML output
 
