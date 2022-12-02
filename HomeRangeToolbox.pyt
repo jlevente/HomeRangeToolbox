@@ -50,14 +50,48 @@ class HomeRangeKDE(object):
             parameterType="Optional",
             direction="Input"
         )
+        radius_method = arcpy.Parameter(
+                displayName='Bandwidth calculation method', 
+                name='radius_method', 
+                datatype='GPString', 
+                parameterType='Optional', 
+                direction="Input", 
+                multiValue=False)
+
+        radius_method.filter.type = "ValueList"
+        radius_method.filter.list = ['Reference bandwidth (Silverman 1986)', 'Least Squares Cross Validation (Seaman & Powell 1996)', 'Manual']
 
         search_radius = arcpy.Parameter(
-            displayName="Search radius",
+            displayName="Manual Search radius",
             name="search_radius",
+            datatype="Double",
+            parameterType="Optional",
+            direction="Input",
+            enabled=False
+        )
+
+        home_cutoff = arcpy.Parameter(
+            displayName="Home cutoff percentage",
+            name="home_cutoff",
             datatype="Double",
             parameterType="Required",
             direction="Input"
         )
+        home_cutoff.filter.type = "Range"
+        home_cutoff.filter.list = [0, 100]
+        home_cutoff.value = 95.0
+
+        core_cutoff = arcpy.Parameter(
+            displayName="Core area cutoff percentage",
+            name="core_cutoff",
+            datatype="Double",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        core_cutoff.filter.type = "Range"
+        core_cutoff.filter.list = [0, 100]
+        core_cutoff.value = 50
 
         out_cell_size = arcpy.Parameter(
             displayName="Output cell size",
@@ -75,7 +109,7 @@ class HomeRangeKDE(object):
             direction="Output"
         )
 
-        params = [observations, barrier_features, search_radius, out_cell_size, out_folder]
+        params = [observations, barrier_features, radius_method, search_radius, home_cutoff, core_cutoff, out_cell_size, out_folder]
         return params
 
     def isLicensed(self):
@@ -86,6 +120,13 @@ class HomeRangeKDE(object):
         """Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
         has been changed."""
+
+        if parameters[2].value == 'Manual':
+            parameters[3].enabled = True
+        else:
+            parameters[3].enabled = False
+        return
+
         return
 
     def updateMessages(self, parameters):
@@ -115,15 +156,31 @@ class HomeRangeKDE(object):
         arcpy.env.workspace = param_values['out_folder']
         arcpy.AddMessage("Outputs will be saved in %s" % (param_values['out_folder']))
 
+         # Check and set up parameters
         if params['barrier_features'].value:
             barrier_path = arcpy.Describe(params['barrier_features'].valueAsText).catalogPath
-            processor.compute_utilization(arcpy, point_fc=obs_path, suffix=None, barrier_features=barrier_path,\
-                                            cell_size=params['out_cell_size'].valueAsText, search_radius=params['search_radius'].valueAsText)
         else:
-            print('e')
-            processor.compute_utilization(arcpy, point_fc=obs_path, suffix=None, barrier_features=None, \
-                                            cell_size=params['out_cell_size'].valueAsText, search_radius=params['search_radius'].valueAsText)
+            barrier_path = None
 
+        out_cell_size = params['out_cell_size'].valueAsText
+        home_cutoff = params['home_cutoff'].valueAsText
+        core_cutoff = params['core_cutoff'].valueAsText
+
+        if params['radius_method'].valueAsText == 'Reference bandwidth (Silverman 1986)':
+            coord_cursor = arcpy.da.SearchCursor(obs_path, ["SHAPE@XY"])
+            bandwidth = processor.calculate_reference_bandwidth(coord_cursor)
+            arcpy.AddMessage('Reference bandwidth based on Silverman 1986: %s' % bandwidth)
+        elif params['radius_method'].valueAsText == 'Least Squares Cross Validation (Seaman & Powell 1996)':
+            coord_cursor = arcpy.da.SearchCursor(obs_path, ["SHAPE@XY"])
+            bandwidth = processor.calculate_lscv_bandwidth(coord_cursor)
+            arcpy.AddMessage('LSCV bandwidth based on on Seaman & Powell 1996: %s' % bandwidth)
+        elif params['radius_method'].valueAsText == 'Manual':
+            bandwidth = params['search_radius'].valueAsText
+            arcpy.AddMessage('Bandwidth set manually: %s' % bandwidth)
+
+        processor.compute_utilization(arcpy, point_fc=obs_path, suffix=None, barrier_features=barrier_path, \
+                                            cell_size=out_cell_size, search_radius=bandwidth, home_cutoff=home_cutoff, \
+                                            core_cutoff=core_cutoff)
         arcpy.AddMessage("All done.")
         return
 
@@ -171,14 +228,6 @@ class HomeRangeKDE_Batch(object):
             direction="Input"
         )
 
-        home_cutoff = arcpy.Parameter(
-            displayName="Home range percentage",
-            name="home_cutoff",
-            datatype="Double",
-            parameterType="Required",
-            direction="Input"
-        )
-
         radius_method = arcpy.Parameter(
                 displayName='Bandwidth calculation method', 
                 name='radius_method', 
@@ -208,7 +257,7 @@ class HomeRangeKDE_Batch(object):
         )
         home_cutoff.filter.type = "Range"
         home_cutoff.filter.list = [0, 100]
-        home_cutoff.value = 50.0
+        home_cutoff.value = 95.0
 
         core_cutoff = arcpy.Parameter(
             displayName="Core area cutoff percentage",
@@ -220,7 +269,7 @@ class HomeRangeKDE_Batch(object):
 
         core_cutoff.filter.type = "Range"
         core_cutoff.filter.list = [0, 100]
-        core_cutoff.value = 95
+        core_cutoff.value = 50
 
         out_cell_size = arcpy.Parameter(
             displayName="Output cell size",
@@ -285,7 +334,6 @@ class HomeRangeKDE_Batch(object):
 
         individuals = []
 
-        # Get absolute path of observations
         with arcpy.da.SearchCursor(obs_path, param_values['animal_id']) as cursor:
             for row in cursor:
                 animal = row[0]
@@ -523,8 +571,6 @@ class HomeRangeCalc(object):
         res = numpy.array(res)
         h_value = value_range[res.argmin()]
         return h_value
-
-
 
 
 # def main():
