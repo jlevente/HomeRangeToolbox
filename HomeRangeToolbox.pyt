@@ -20,7 +20,7 @@ class Toolbox(object):
         self.alias = "HomeRangeAnalysis"
 
         # List of tool classes associated with this toolbox
-        self.tools = [HomeRangeKDE, HomeRangeKDE_Batch, HomeRangeMCP]
+        self.tools = [HomeRangeKDE, HomeRangeKDE_Batch, HomeRangeMCP, HomeRangeMCP_Batch]
 
 class HomeRangeKDE(object):
     def __init__(self):
@@ -400,7 +400,48 @@ class HomeRangeMCP(object):
 
     def getParameterInfo(self):
         """Define parameter definitions"""
-        params = None
+        observations = arcpy.Parameter(
+            displayName="Input observations",
+            name="observations",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        observations.filter.list = ['Point', 'MultiPoint']
+
+        home_cutoff = arcpy.Parameter(
+            displayName="Home cutoff percentage",
+            name="home_cutoff",
+            datatype="Double",
+            parameterType="Required",
+            direction="Input"
+        )
+        home_cutoff.filter.type = "Range"
+        home_cutoff.filter.list = [0, 100]
+        home_cutoff.value = 95.0
+
+        core_cutoff = arcpy.Parameter(
+            displayName="Core area cutoff percentage",
+            name="core_cutoff",
+            datatype="Double",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        core_cutoff.filter.type = "Range"
+        core_cutoff.filter.list = [0, 100]
+        core_cutoff.value = 50
+
+        out_folder = arcpy.Parameter(
+            displayName="Output folder",
+            name="out_folder",
+            datatype="DEFolder",
+            parameterType="Required",
+            direction="Output"
+        )
+
+        params = [observations, home_cutoff, core_cutoff, out_folder]
         return params
 
     def isLicensed(self):
@@ -420,6 +461,157 @@ class HomeRangeMCP(object):
 
     def execute(self, parameters, messages):
         """The source code of the tool."""
+        processor = HomeRangeCalc()
+
+        arcpy.CheckOutExtension('spatial')
+        arcpy.env.overwriteOutput = True
+
+        param_values = {}
+        params = {}
+        for param in parameters:
+            param_values[param.name] = param.valueAsText
+            params[param.name] = param
+
+        obs_path = arcpy.Describe(params['observations']).catalogPath
+
+        param_values['out_folder'] = param_values['out_folder'].replace('\\', '/')
+        os.makedirs(param_values['out_folder'], exist_ok=True)
+        arcpy.env.workspace = param_values['out_folder']
+        arcpy.AddMessage("Outputs will be saved in %s" % (param_values['out_folder']))
+
+        processor.compute_mcp(arcpy, obs_path, suffix=None, home_cutoff=params['home_cutoff'].valueAsText, core_cutoff=params['core_cutoff'].valueAsText)
+
+        return
+
+    def postExecute(self, parameters):
+        """This method takes place after outputs are processed and
+        added to the display."""
+        return
+
+class HomeRangeMCP_Batch(object):
+    def __init__(self):
+        """Define the tool (tool name is the name of the class)."""
+        self.label = "Batch Home Range Estimation using MCP"
+        self.description = "Batch Home Range Estimation using Minimum Convex Polygons"
+        self.canRunInBackground = False
+
+    def getParameterInfo(self):
+        """Define parameter definitions"""
+        observations = arcpy.Parameter(
+            displayName="Input observations",
+            name="observations",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        observations.filter.list = ['Point', 'MultiPoint']
+
+        animal_id = arcpy.Parameter(
+            displayName="Animal ID field",
+            name="animal_id",
+            datatype="Field",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        animal_id.parameterDependencies = [observations.name]
+
+        home_cutoff = arcpy.Parameter(
+            displayName="Home cutoff percentage",
+            name="home_cutoff",
+            datatype="Double",
+            parameterType="Required",
+            direction="Input"
+        )
+        home_cutoff.filter.type = "Range"
+        home_cutoff.filter.list = [0, 100]
+        home_cutoff.value = 95.0
+
+        core_cutoff = arcpy.Parameter(
+            displayName="Core area cutoff percentage",
+            name="core_cutoff",
+            datatype="Double",
+            parameterType="Required",
+            direction="Input"
+        )
+
+        core_cutoff.filter.type = "Range"
+        core_cutoff.filter.list = [0, 100]
+        core_cutoff.value = 50
+
+        out_folder = arcpy.Parameter(
+            displayName="Output folder",
+            name="out_folder",
+            datatype="DEFolder",
+            parameterType="Required",
+            direction="Output"
+        )
+
+        params = [observations, animal_id, home_cutoff, core_cutoff, out_folder]
+        return params
+
+    def isLicensed(self):
+        """Set whether tool is licensed to execute."""
+        return True
+
+    def updateParameters(self, parameters):
+        """Modify the values and properties of parameters before internal
+        validation is performed.  This method is called whenever a parameter
+        has been changed."""
+        return
+
+    def updateMessages(self, parameters):
+        """Modify the messages created by internal validation for each tool
+        parameter.  This method is called after internal validation."""
+        return
+
+    def execute(self, parameters, messages):
+        """The source code of the tool."""
+        processor = HomeRangeCalc()
+
+        arcpy.CheckOutExtension('spatial')
+        arcpy.env.overwriteOutput = True
+
+        param_values = {}
+        params = {}
+        for param in parameters:
+            param_values[param.name] = param.valueAsText
+            params[param.name] = param
+
+        obs_path = arcpy.Describe(params['observations']).catalogPath
+
+        param_values['out_folder'] = param_values['out_folder'].replace('\\', '/')
+        os.makedirs(param_values['out_folder'], exist_ok=True)
+        arcpy.env.workspace = param_values['out_folder']
+        arcpy.AddMessage("Outputs will be saved in %s" % (param_values['out_folder']))
+
+        individuals = []
+
+        with arcpy.da.SearchCursor(obs_path, param_values['animal_id']) as cursor:
+            for row in cursor:
+                animal = row[0]
+                if animal not in individuals:
+                    individuals.append(animal)
+        
+        # Loop over each individual and calculate KDE
+        arcpy.AddMessage("Found %s individuals." % len(individuals))
+        i = 0
+        for animal in individuals:
+            i += 1
+            if i % 4 == 0:
+                arcpy.AddMessage("%s/%s individuals done." % (i, len(individuals)))
+                break
+
+            tmp_points = r'animal.shp'
+
+            where_txt = '"%s" = \'%s\'' % (param_values['animal_id'], animal)
+           
+            arcpy.Select_analysis(obs_path, tmp_points, where_clause=where_txt)
+            tmp_points_path = arcpy.Describe(tmp_points).catalogPath
+
+            processor.compute_mcp(arcpy, tmp_points_path, suffix=animal, home_cutoff=params['home_cutoff'].valueAsText, core_cutoff=params['core_cutoff'].valueAsText)
+
         return
 
     def postExecute(self, parameters):
@@ -489,8 +681,65 @@ class HomeRangeCalc(object):
         arcpy.Delete_management(out_raster_path)
         arcpy.Delete_management(tmp_raster_points)
         # Do not delete point feature class if not called from within a loop (i.e. suffix is None)
-        #if suffix:
-        #    arcpy.Delete_management(point_fc)
+        if suffix:
+            arcpy.Delete_management(point_fc)
+
+        # Barrier lines
+        # Central Feature
+        # Calculate Eucledian distance
+        # Extract values from distance raster
+        # Order distances, discard points for home and core
+        # Calculate MCP with points
+
+    def compute_mcp(self, arcpy, point_fc, suffix, home_cutoff, core_cutoff):
+        central = r'central_feature.shp'
+        dist_raster = r'distance.tif'
+        tmp_points = r'selection.shp'
+
+        if suffix:
+            mcp_home = r'mcp_home_%s.shp' % suffix
+            mcp_core = r'mcp_core_%s.shp' % suffix
+        else:
+            out_raster_name = "kde.tif"
+
+        arcpy.stats.CentralFeature(point_fc, central, 'EUCLIDEAN_DISTANCE')
+
+        arcpy.analysis.Near(point_fc, central)
+
+        distances = []
+
+        with arcpy.da.SearchCursor(point_fc, 'NEAR_DIST') as cursor:
+            for val in cursor:
+                distances.append(val[0])
+
+        distances.sort(reverse=False)
+        num_records = len(distances)
+
+        home_cutoff = int(num_records * float(home_cutoff)/100.0)
+        core_cutoff = int(num_records * float(core_cutoff)/100.0)
+
+        home_cutoff_value = distances[home_cutoff - 1]
+        core_cutoff_value = distances[core_cutoff - 1]
+
+        arcpy.AddMessage(home_cutoff_value)
+        arcpy.AddMessage(core_cutoff_value)
+
+        # Home
+        where_clause_home = '"NEAR_DIST" < %s' % home_cutoff_value 
+        arcpy.analysis.Select(point_fc, tmp_points, where_clause=where_clause_home)
+        arcpy.management.MinimumBoundingGeometry(tmp_points, mcp_home, geometry_type='CONVEX_HULL')
+
+        # Core
+        where_clause_core = '"NEAR_DIST" < %s' % core_cutoff_value 
+        arcpy.analysis.Select(point_fc, tmp_points, where_clause=where_clause_core)
+        arcpy.management.MinimumBoundingGeometry(tmp_points, mcp_core, geometry_type='CONVEX_HULL')
+
+        arcpy.Delete_management(dist_raster)
+        arcpy.Delete_management(tmp_points)
+        # Do not delete point feature class if not called from within a loop (i.e. suffix is None)
+        if suffix:
+            arcpy.Delete_management(point_fc)     
+
 
     # This function extracts lists of x and y coordinates from a search cursor,
     # then returns and optimized bandwidth value for those observations
@@ -518,7 +767,6 @@ class HomeRangeCalc(object):
 
         st_dist = math.sqrt(sum(distances) / n)
         d_m = math.sqrt(1/math.log(2)) * math.sqrt(statistics.median(distances))
-
 
         if st_dist < d_m:
             A = st_dist
