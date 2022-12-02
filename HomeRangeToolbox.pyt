@@ -178,7 +178,7 @@ class HomeRangeKDE(object):
             bandwidth = params['search_radius'].valueAsText
             arcpy.AddMessage('Bandwidth set manually: %s' % bandwidth)
 
-        processor.compute_utilization(arcpy, point_fc=obs_path, suffix=None, barrier_features=barrier_path, \
+        processor.compute_kde(arcpy, point_fc=obs_path, suffix=None, barrier_features=barrier_path, \
                                             cell_size=out_cell_size, search_radius=bandwidth, home_cutoff=home_cutoff, \
                                             core_cutoff=core_cutoff)
         arcpy.AddMessage("All done.")
@@ -379,7 +379,7 @@ class HomeRangeKDE_Batch(object):
                 bandwidth = params['search_radius'].valueAsText
                 arcpy.AddMessage('Bandwidth set manually: %s' % bandwidth)
 
-            processor.compute_utilization(arcpy, point_fc=tmp_points_path, suffix=animal, barrier_features=barrier_path, \
+            processor.compute_kde(arcpy, point_fc=tmp_points_path, suffix=animal, barrier_features=barrier_path, \
                                             cell_size=out_cell_size, search_radius=bandwidth, home_cutoff=home_cutoff, \
                                             core_cutoff=core_cutoff)
 
@@ -429,7 +429,7 @@ class HomeRangeMCP(object):
 
 # Class that contains the functionality
 class HomeRangeCalc(object):
-    def compute_utilization(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius, home_cutoff, core_cutoff):
+    def compute_kde(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius, home_cutoff, core_cutoff):
         # Build KDE raster
         if barrier_features:
             raster = arcpy.sa.KernelDensity(point_fc, None, cell_size, search_radius, in_barriers=barrier_path)
