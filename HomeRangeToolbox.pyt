@@ -14,8 +14,7 @@ import re
 
 class Toolbox(object):
     def __init__(self):
-        """Define the toolbox (the name of the toolbox is the name of the
-        .pyt file)."""
+        """ArcGIS Python Toolbox class."""
         self.label = "Home Range Analysis Toolbox"
         self.alias = "HomeRangeAnalysis"
 
@@ -23,6 +22,7 @@ class Toolbox(object):
         self.tools = [HomeRangeKDE, HomeRangeKDE_Batch, HomeRangeMCP, HomeRangeMCP_Batch]
 
 class HomeRangeKDE(object):
+    """Class to represent Home Range Calculations using KDE in a Python toolbox."""
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Home Range Estimation using KDE"
@@ -353,7 +353,7 @@ class HomeRangeKDE_Batch(object):
                       
             where_txt = '"%s" = \'%s\'' % (param_values['animal_id'], animal)
            
-            arcpy.Select_analysis(obs_path, tmp_points, where_clause=where_txt)
+            arcpy.analysis.Select(obs_path, tmp_points, where_clause=where_txt)
             tmp_points_path = arcpy.Describe(tmp_points).catalogPath
 
 
@@ -607,7 +607,7 @@ class HomeRangeMCP_Batch(object):
 
             where_txt = '"%s" = \'%s\'' % (param_values['animal_id'], animal)
            
-            arcpy.Select_analysis(obs_path, tmp_points, where_clause=where_txt)
+            arcpy.analysis.Select(obs_path, tmp_points, where_clause=where_txt)
             tmp_points_path = arcpy.Describe(tmp_points).catalogPath
 
             processor.compute_mcp(arcpy, tmp_points_path, suffix=animal, home_cutoff=params['home_cutoff'].valueAsText, core_cutoff=params['core_cutoff'].valueAsText)
@@ -619,9 +619,35 @@ class HomeRangeMCP_Batch(object):
         added to the display."""
         return
 
-# Class that contains the functionality
 class HomeRangeCalc(object):
+    """Class that contains methods needed to calculate home ranges."""
     def compute_kde(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius, home_cutoff, core_cutoff):
+        """Implements Kernel Density Estimation
+
+        If the argument `suffix` is None, the method is called from the HomeRangeKDE function. If `suffix` is set,
+        the HomeRangeKDE_Batch Tool is being used.
+
+        Parameters
+        ----------
+        arcpy : module
+            arcpy module that contains environmental settings and ArcGIS functionality to be called.
+        point_fc : str
+            Path to a point Feature Class that contains point observations. Type must be Point or MultiPoint
+        suffix : str, optional
+            Unique animal ID. Used when iterating through individuals stored in the same input file. Called
+            from a loop that iterates over unique animal IDs.
+        barrier_features: str, optional
+            Path to a Feature Class with barriers.
+        cell_size
+            Spatial resolution of output KDE raster.
+        search_radius : double
+            Bandwidth of Kernel used in density estimation.
+        home_cutoff : double
+            Cutoff percentage value to determine home range. Values must be between 0 and 100. Default is 95%.
+        core_cutoff : double
+            Cutoff percentage value to determine core area. Values must be between 0 and 100. Default is 50%.
+        """
+
         # Build KDE raster
         if barrier_features:
             raster = arcpy.sa.KernelDensity(point_fc, None, cell_size, search_radius, in_barriers=barrier_features)
@@ -655,7 +681,7 @@ class HomeRangeCalc(object):
         home_cutoff_value = value_list[home_cutoff - 1]
         core_cutoff_value = value_list[core_cutoff - 1]
 
-        max_kernel_value = arcpy.GetRasterProperties_management(out_raster_name, 'MAXIMUM')
+        max_kernel_value = arcpy.management.GetRasterProperties(out_raster_name, 'MAXIMUM')
 
         # Reclass expression format: min_value max_value RECLASS_VALUE (separated by ;)
         reclass_expression_home = '0 %s NODATA; %s %s %s' % (home_cutoff_value, home_cutoff_value, max_kernel_value, 1)
