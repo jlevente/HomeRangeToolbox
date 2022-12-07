@@ -156,7 +156,7 @@ class HomeRangeKDE(object):
         arcpy.env.workspace = param_values['out_folder']
         arcpy.AddMessage("Outputs will be saved in %s" % (param_values['out_folder']))
 
-         # Check and set up parameters
+        # Check and set up parameters
         if params['barrier_features'].value:
             barrier_path = arcpy.Describe(params['barrier_features'].valueAsText).catalogPath
         else:
@@ -382,6 +382,8 @@ class HomeRangeKDE_Batch(object):
             processor.compute_kde(arcpy, point_fc=tmp_points_path, suffix=animal, barrier_features=barrier_path, \
                                             cell_size=out_cell_size, search_radius=bandwidth, home_cutoff=home_cutoff, \
                                             core_cutoff=core_cutoff)
+
+            arcpy.management.Delete(tmp_points_path)
 
         arcpy.AddMessage("All done.")
         return
@@ -612,6 +614,8 @@ class HomeRangeMCP_Batch(object):
 
             processor.compute_mcp(arcpy, tmp_points_path, suffix=animal, home_cutoff=params['home_cutoff'].valueAsText, core_cutoff=params['core_cutoff'].valueAsText)
 
+            arcpy.managemet.Delete(tmp_points_path)
+
         return
 
     def postExecute(self, parameters):
@@ -701,14 +705,14 @@ class HomeRangeCalc(object):
         core_raster.save(out_core_name + '.tif')
 
         arcpy.AddMessage(out_home_name + '.shp')
-        arcpy.RasterToPolygon_conversion(home_raster, out_home_name + '.shp', 'SIMPLIFY', 'Value')
-        arcpy.RasterToPolygon_conversion(core_raster, out_core_name + '.shp', 'SIMPLIFY', 'Value')
+        arcpy.conversion.RasterToPolygon(home_raster, out_home_name + '.shp', 'SIMPLIFY', 'Value')
+        arcpy.conversion.RasterToPolygon(core_raster, out_core_name + '.shp', 'SIMPLIFY', 'Value')
 
-        arcpy.Delete_management(out_raster_path)
-        arcpy.Delete_management(tmp_raster_points)
+        arcpy.management.Delete(out_raster_path)
+        arcpy.management.Delete(tmp_raster_points)
         # Do not delete point feature class if not called from within a loop (i.e. suffix is None)
         if suffix:
-            arcpy.Delete_management(point_fc)
+            arcpy.management.Delete(point_fc)
 
         # Barrier lines
         # Central Feature
@@ -718,6 +722,21 @@ class HomeRangeCalc(object):
         # Calculate MCP with points
 
     def compute_mcp(self, arcpy, point_fc, suffix, home_cutoff, core_cutoff):
+        """Summary
+        
+        Parameters
+        ----------
+        arcpy : TYPE
+            Description
+        point_fc : TYPE
+            Description
+        suffix : TYPE
+            Description
+        home_cutoff : TYPE
+            Description
+        core_cutoff : TYPE
+            Description
+        """
         central = r'central_feature.shp'
         dist_raster = r'distance.tif'
         tmp_points = r'selection.shp'
@@ -760,11 +779,11 @@ class HomeRangeCalc(object):
         arcpy.analysis.Select(point_fc, tmp_points, where_clause=where_clause_core)
         arcpy.management.MinimumBoundingGeometry(tmp_points, mcp_core, geometry_type='CONVEX_HULL')
 
-        arcpy.Delete_management(dist_raster)
-        arcpy.Delete_management(tmp_points)
+        arcpy.management.Delete(dist_raster)
+        arcpy.management.Delete(tmp_points)
         # Do not delete point feature class if not called from within a loop (i.e. suffix is None)
         if suffix:
-            arcpy.Delete_management(point_fc)     
+            arcpy.management.Delete(point_fc)     
 
 
     # This function extracts lists of x and y coordinates from a search cursor,
