@@ -349,7 +349,7 @@ class HomeRangeKDE_Batch(object):
                 arcpy.AddMessage("%s/%s individuals done." % (i, len(individuals)))
                 #break
 
-            tmp_points = r'animal.shp'
+            tmp_points = r'tmp.shp'
                       
             where_txt = '"%s" = \'%s\'' % (param_values['animal_id'], animal)
            
@@ -605,7 +605,7 @@ class HomeRangeMCP_Batch(object):
                 arcpy.AddMessage("%s/%s individuals done." % (i, len(individuals)))
                 #break
 
-            tmp_points = r'animal.shp'
+            tmp_points = r'tmp.shp'
 
             where_txt = '"%s" = \'%s\'' % (param_values['animal_id'], animal)
            
@@ -710,6 +710,8 @@ class HomeRangeCalc(object):
 
         arcpy.management.Delete(out_raster_path)
         arcpy.management.Delete(tmp_raster_points)
+        arcpy.management.Delete(out_home_name)
+        arcpy.management.Delete(out_core_name)
         # Do not delete point feature class if not called from within a loop (i.e. suffix is None)
         if suffix:
             arcpy.management.Delete(point_fc)
