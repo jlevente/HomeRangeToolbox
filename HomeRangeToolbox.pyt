@@ -370,7 +370,7 @@ class HomeRangeKDE_Batch(object):
             i += 1
             if i % 5 == 0:
                 arcpy.AddMessage("%s/%s individuals done." % (i, len(individuals)))
-                #tbreak
+                #break
 
             tmp_points = r'tmp.shp'
                       
@@ -405,7 +405,7 @@ class HomeRangeKDE_Batch(object):
 
             processor.compute_kde(arcpy, point_fc=tmp_points_path, suffix=animal, barrier_features=barrier_path, \
                                             cell_size=out_cell_size, search_radius=bandwidth, home_cutoff=home_cutoff, \
-                                            core_cutoff=core_cutoff, areal_unit=areal_unit)
+                                            core_cutoff=core_cutoff, areal_unit=areal_unit, iteration=i)
 
             arcpy.management.Delete(tmp_points_path)
 
@@ -654,6 +654,8 @@ class HomeRangeMCP_Batch(object):
                 #break
 
             tmp_points = r'tmp.shp'
+            out_home = r'home_range_mcp.shp'
+            out_core = r'core_range_mcp.shp'
 
             where_txt = '"%s" = \'%s\'' % (param_values['animal_id'], animal)
            
@@ -662,9 +664,9 @@ class HomeRangeMCP_Batch(object):
 
             areal_unit = processor.area_unit_lookup(params['area_unit'].valueAsText)
 
-            processor.compute_mcp(arcpy, tmp_points_path, suffix=animal, home_cutoff=params['home_cutoff'].valueAsText, core_cutoff=params['core_cutoff'].valueAsText, areal_unit=areal_unit)
+            processor.compute_mcp(arcpy, tmp_points_path, suffix=animal, home_cutoff=params['home_cutoff'].valueAsText, core_cutoff=params['core_cutoff'].valueAsText, areal_unit=areal_unit, iteration=i)
 
-            arcpy.managemet.Delete(tmp_points_path)
+            arcpy.management.Delete(tmp_points_path)
 
         return
 
@@ -686,7 +688,7 @@ class HomeRangeCalc(object):
         }
         return units[unit]
 
-    def compute_kde(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius, home_cutoff, core_cutoff, areal_unit):
+    def compute_kde(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius, home_cutoff, core_cutoff, areal_unit, iteration):
         """Implements Kernel Density Estimation
 
         If the argument `suffix` is None, the method is called from the HomeRangeKDE function. If `suffix` is set,
@@ -790,6 +792,17 @@ class HomeRangeCalc(object):
         arcpy.management.CalculateGeometryAttributes(out_core_name, [['area', 'AREA']], area_unit=areal_unit)
 
 
+        # Create final output files
+        if iteration==1 and suffix:
+            arcpy.management.Copy(out_home_name, 'home_range.shp')
+            arcpy.management.Copy(out_core_name, 'core_range.shp')
+            arcpy.management.Delete(out_home_name)
+            arcpy.management.Delete(out_core_name)
+        elif iteration > 1 and suffix:
+            arcpy.management.Append(out_home_name, 'home_range.shp')
+            arcpy.management.Append(out_core_name, 'core_range.shp')
+            arcpy.management.Delete(out_home_name)
+            arcpy.management.Delete(out_core_name)
 
         arcpy.management.Delete(out_raster_path)
         arcpy.management.Delete(tmp_raster_points)
@@ -808,7 +821,7 @@ class HomeRangeCalc(object):
         # Order distances, discard points for home and core
         # Calculate MCP with points
 
-    def compute_mcp(self, arcpy, point_fc, suffix, home_cutoff, core_cutoff, areal_unit):
+    def compute_mcp(self, arcpy, point_fc, suffix, home_cutoff, core_cutoff, areal_unit, iteration):
         """Summary
         
         Parameters
@@ -884,6 +897,18 @@ class HomeRangeCalc(object):
 
         arcpy.management.CalculateGeometryAttributes(mcp_home, [['area', 'AREA']], area_unit=areal_unit)
         arcpy.management.CalculateGeometryAttributes(mcp_core, [['area', 'AREA']], area_unit=areal_unit)
+
+        # Create final output files
+        if iteration==1 and suffix:
+            arcpy.management.Copy(mcp_home, 'mcp_home.shp')
+            arcpy.management.Copy(mcp_core, 'mcp_core.shp')
+            arcpy.management.Delete(mcp_home)
+            arcpy.management.Delete(mcp_core)
+        elif iteration > 1 and suffix:
+            arcpy.management.Append(mcp_home, 'mcp_home.shp')
+            arcpy.management.Append(mcp_core, 'mcp_core.shp')
+            arcpy.management.Delete(mcp_home)
+            arcpy.management.Delete(mcp_core)
 
         arcpy.management.Delete(dist_raster)
         arcpy.management.Delete(tmp_points)
