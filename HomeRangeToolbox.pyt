@@ -101,6 +101,17 @@ class HomeRangeKDE(object):
             direction="Output"
         )
 
+        area_unit = arcpy.Parameter(
+            displayName="Area unit",
+            name="area_unit",
+            datatype="GPString",
+            direction="Input",
+            parameterType="Required"
+        )
+        area_unit.filter.type = 'ValueList'
+        area_unit.filter.list = ['Square meters', 'Square kilometers', 'Hectares', 'Square feet (int)', 'Square miles (int)', 'Acres']
+        area_unit.value = 'Square meters'
+
         out_folder = arcpy.Parameter(
             displayName="Output folder",
             name="out_folder",
@@ -109,7 +120,7 @@ class HomeRangeKDE(object):
             direction="Output"
         )
 
-        params = [observations, barrier_features, radius_method, search_radius, home_cutoff, core_cutoff, out_cell_size, out_folder]
+        params = [observations, barrier_features, radius_method, search_radius, home_cutoff, core_cutoff, out_cell_size, area_unit, out_folder]
         return params
 
     def isLicensed(self):
@@ -165,6 +176,7 @@ class HomeRangeKDE(object):
         out_cell_size = params['out_cell_size'].valueAsText
         home_cutoff = params['home_cutoff'].valueAsText
         core_cutoff = params['core_cutoff'].valueAsText
+        areal_unit = params['area_unit'].valueAsText
 
         if params['radius_method'].valueAsText == 'Reference bandwidth (Silverman 1986)':
             coord_cursor = arcpy.da.SearchCursor(obs_path, ["SHAPE@XY"])
@@ -180,7 +192,7 @@ class HomeRangeKDE(object):
 
         processor.compute_kde(arcpy, point_fc=obs_path, suffix=None, barrier_features=barrier_path, \
                                             cell_size=out_cell_size, search_radius=bandwidth, home_cutoff=home_cutoff, \
-                                            core_cutoff=core_cutoff)
+                                            core_cutoff=core_cutoff, areal_unit=areal_unit)
         arcpy.AddMessage("All done.")
         return
 
@@ -358,7 +370,7 @@ class HomeRangeKDE_Batch(object):
             i += 1
             if i % 5 == 0:
                 arcpy.AddMessage("%s/%s individuals done." % (i, len(individuals)))
-                #break
+                #tbreak
 
             tmp_points = r'tmp.shp'
                       
@@ -447,6 +459,17 @@ class HomeRangeMCP(object):
         core_cutoff.filter.list = [0, 100]
         core_cutoff.value = 50
 
+        area_unit = arcpy.Parameter(
+            displayName="Area unit",
+            name="area_unit",
+            datatype="GPString",
+            direction="Input",
+            parameterType="Required"
+        )
+        area_unit.filter.type = 'ValueList'
+        area_unit.filter.list = ['Square meters', 'Square kilometers', 'Hectares', 'Square feet (int)', 'Square miles (int)', 'Acres']
+        area_unit.value = 'Square meters'
+
         out_folder = arcpy.Parameter(
             displayName="Output folder",
             name="out_folder",
@@ -455,7 +478,7 @@ class HomeRangeMCP(object):
             direction="Output"
         )
 
-        params = [observations, home_cutoff, core_cutoff, out_folder]
+        params = [observations, home_cutoff, core_cutoff, area_unit, out_folder]
         return params
 
     def isLicensed(self):
@@ -493,7 +516,9 @@ class HomeRangeMCP(object):
         arcpy.env.workspace = param_values['out_folder']
         arcpy.AddMessage("Outputs will be saved in %s" % (param_values['out_folder']))
 
-        processor.compute_mcp(arcpy, obs_path, suffix=None, home_cutoff=params['home_cutoff'].valueAsText, core_cutoff=params['core_cutoff'].valueAsText)
+        areal_unit = processor.area_unit_lookup(params['area_unit'].valueAsText)
+
+        processor.compute_mcp(arcpy, obs_path, suffix=None, home_cutoff=params['home_cutoff'].valueAsText, core_cutoff=params['core_cutoff'].valueAsText, areal_unit=areal_unit)
 
         return
 
@@ -562,7 +587,18 @@ class HomeRangeMCP_Batch(object):
             direction="Output"
         )
 
-        params = [observations, animal_id, home_cutoff, core_cutoff, out_folder]
+        area_unit = arcpy.Parameter(
+            displayName="Area unit",
+            name="area_unit",
+            datatype="GPString",
+            direction="Input",
+            parameterType="Required"
+        )
+        area_unit.filter.type = 'ValueList'
+        area_unit.filter.list = ['Square meters', 'Square kilometers', 'Hectares', 'Square feet (int)', 'Square miles (int)', 'Acres']
+        area_unit.value = 'Square meters'
+
+        params = [observations, animal_id, home_cutoff, core_cutoff, area_unit, out_folder]
         return params
 
     def isLicensed(self):
@@ -624,7 +660,9 @@ class HomeRangeMCP_Batch(object):
             arcpy.analysis.Select(obs_path, tmp_points, where_clause=where_txt)
             tmp_points_path = arcpy.Describe(tmp_points).catalogPath
 
-            processor.compute_mcp(arcpy, tmp_points_path, suffix=animal, home_cutoff=params['home_cutoff'].valueAsText, core_cutoff=params['core_cutoff'].valueAsText)
+            areal_unit = processor.area_unit_lookup(params['area_unit'].valueAsText)
+
+            processor.compute_mcp(arcpy, tmp_points_path, suffix=animal, home_cutoff=params['home_cutoff'].valueAsText, core_cutoff=params['core_cutoff'].valueAsText, areal_unit=areal_unit)
 
             arcpy.managemet.Delete(tmp_points_path)
 
@@ -770,7 +808,7 @@ class HomeRangeCalc(object):
         # Order distances, discard points for home and core
         # Calculate MCP with points
 
-    def compute_mcp(self, arcpy, point_fc, suffix, home_cutoff, core_cutoff):
+    def compute_mcp(self, arcpy, point_fc, suffix, home_cutoff, core_cutoff, areal_unit):
         """Summary
         
         Parameters
@@ -794,6 +832,8 @@ class HomeRangeCalc(object):
             mcp_home = r'mcp_home_%s.shp' % suffix
             mcp_core = r'mcp_core_%s.shp' % suffix
         else:
+            mcp_home = r'mcp_home.shp'
+            mcp_core = r'mcp_core.shp'
             out_raster_name = "kde.tif"
 
         arcpy.stats.CentralFeature(point_fc, central, 'EUCLIDEAN_DISTANCE')
@@ -828,8 +868,26 @@ class HomeRangeCalc(object):
         arcpy.analysis.Select(point_fc, tmp_points, where_clause=where_clause_core)
         arcpy.management.MinimumBoundingGeometry(tmp_points, mcp_core, geometry_type='CONVEX_HULL')
 
+        # Add field for animal ID
+        if suffix:
+            arcpy.management.AddField(mcp_home, 'subject', 'TEXT')
+            arcpy.management.AddField(mcp_core, 'subject', 'TEXT')
+
+        # Add field for area calculation
+        arcpy.management.AddField(mcp_home, 'area', 'DOUBLE')
+        arcpy.management.AddField(mcp_core, 'area', 'DOUBLE')
+
+        # Calculate fields
+        if suffix:
+            arcpy.management.CalculateField(mcp_home, 'subject', "'" + suffix + "'", 'PYTHON3')
+            arcpy.management.CalculateField(mcp_core, 'subject', "'" + suffix + "'", 'PYTHON3')
+
+        arcpy.management.CalculateGeometryAttributes(mcp_home, [['area', 'AREA']], area_unit=areal_unit)
+        arcpy.management.CalculateGeometryAttributes(mcp_core, [['area', 'AREA']], area_unit=areal_unit)
+
         arcpy.management.Delete(dist_raster)
         arcpy.management.Delete(tmp_points)
+        arcpy.management.Delete(central)
         # Do not delete point feature class if not called from within a loop (i.e. suffix is None)
         if suffix:
             arcpy.management.Delete(point_fc)     
