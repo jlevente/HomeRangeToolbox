@@ -279,6 +279,17 @@ class HomeRangeKDE_Batch(object):
             direction="Output"
         )
 
+        area_unit = arcpy.Parameter(
+            displayName="Area unit",
+            name="area_unit",
+            datatype="GPString",
+            direction="Input",
+            parameterType="Required"
+        )
+        area_unit.filter.type = 'ValueList'
+        area_unit.filter.list = ['Square meters', 'Square kilometers', 'Hectares', 'Square feet (int)', 'Square miles (int)', 'Acres']
+        area_unit.value = 'Square meters'
+
         out_folder = arcpy.Parameter(
             displayName="Output folder",
             name="out_folder",
@@ -287,7 +298,7 @@ class HomeRangeKDE_Batch(object):
             direction="Output"
         )
 
-        params = [observations, animal_id, barrier_features, radius_method, search_radius, home_cutoff, core_cutoff, out_cell_size, out_folder]
+        params = [observations, animal_id, barrier_features, radius_method, search_radius, home_cutoff, core_cutoff, out_cell_size, area_unit, out_folder]
         return params
 
     def isLicensed(self):
@@ -366,6 +377,7 @@ class HomeRangeKDE_Batch(object):
             out_cell_size = params['out_cell_size'].valueAsText
             home_cutoff = params['home_cutoff'].valueAsText
             core_cutoff = params['core_cutoff'].valueAsText
+            areal_unit = processor.area_unit_lookup(params['area_unit'].valueAsText)
 
             if params['radius_method'].valueAsText == 'Reference bandwidth (Silverman 1986)':
                 coord_cursor = arcpy.da.SearchCursor(tmp_points_path, ["SHAPE@XY"])
@@ -381,7 +393,7 @@ class HomeRangeKDE_Batch(object):
 
             processor.compute_kde(arcpy, point_fc=tmp_points_path, suffix=animal, barrier_features=barrier_path, \
                                             cell_size=out_cell_size, search_radius=bandwidth, home_cutoff=home_cutoff, \
-                                            core_cutoff=core_cutoff)
+                                            core_cutoff=core_cutoff, areal_unit=areal_unit)
 
             arcpy.management.Delete(tmp_points_path)
 
@@ -625,7 +637,18 @@ class HomeRangeMCP_Batch(object):
 
 class HomeRangeCalc(object):
     """Class that contains methods needed to calculate home ranges."""
-    def compute_kde(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius, home_cutoff, core_cutoff):
+    def area_unit_lookup(self, unit):
+        units = {
+                "Square meters": "SQUARE_METERS",
+                "Square kilometers": "SQUARE_KILOMETERS",
+                "Hectares": "HECTARES",
+                "Square feet (int)": "SQUARE_FEET_INT",
+                "Square miles (int)": "SQUARE_MILES_INT",
+                "Acres": "ACRES_US"
+        }
+        return units[unit]
+
+    def compute_kde(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius, home_cutoff, core_cutoff, areal_unit):
         """Implements Kernel Density Estimation
 
         If the argument `suffix` is None, the method is called from the HomeRangeKDE function. If `suffix` is set,
@@ -705,13 +728,37 @@ class HomeRangeCalc(object):
         core_raster.save(out_core_name + '.tif')
 
         arcpy.AddMessage(out_home_name + '.shp')
-        arcpy.conversion.RasterToPolygon(home_raster, out_home_name + '.shp', 'SIMPLIFY', 'Value')
-        arcpy.conversion.RasterToPolygon(core_raster, out_core_name + '.shp', 'SIMPLIFY', 'Value')
+        arcpy.conversion.RasterToPolygon(home_raster, out_home_name + 'poly.shp', 'SIMPLIFY', 'Value')
+        arcpy.conversion.RasterToPolygon(core_raster, out_core_name + 'poly.shp', 'SIMPLIFY', 'Value')
+
+        arcpy.management.Dissolve(out_home_name + 'poly.shp', out_home_name + '.shp' )
+        arcpy.management.Dissolve(out_core_name + 'poly.shp', out_core_name + '.shp' )
+
+        # Add field for animal ID
+        if suffix:
+            arcpy.management.AddField(out_home_name, 'subject', 'TEXT')
+            arcpy.management.AddField(out_core_name, 'subject', 'TEXT')
+
+        # Add field for area calculation
+        arcpy.management.AddField(out_home_name, 'area', 'DOUBLE')
+        arcpy.management.AddField(out_core_name, 'area', 'DOUBLE')
+
+        # Calculate fields
+        if suffix:
+            arcpy.management.CalculateField(out_home_name, 'subject', "'" + suffix + "'", 'PYTHON3')
+            arcpy.management.CalculateField(out_core_name, 'subject', "'" + suffix + "'", 'PYTHON3')
+
+        arcpy.management.CalculateGeometryAttributes(out_home_name, [['area', 'AREA']], area_unit=areal_unit)
+        arcpy.management.CalculateGeometryAttributes(out_core_name, [['area', 'AREA']], area_unit=areal_unit)
+
+
 
         arcpy.management.Delete(out_raster_path)
         arcpy.management.Delete(tmp_raster_points)
-        arcpy.management.Delete(out_home_name)
-        arcpy.management.Delete(out_core_name)
+        arcpy.management.Delete(out_home_name + '.tif')
+        arcpy.management.Delete(out_core_name + '.tif')
+        arcpy.management.Delete(out_home_name + 'poly.shp')
+        arcpy.management.Delete(out_core_name + 'poly.shp')
         # Do not delete point feature class if not called from within a loop (i.e. suffix is None)
         if suffix:
             arcpy.management.Delete(point_fc)
