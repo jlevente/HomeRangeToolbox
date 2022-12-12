@@ -112,7 +112,7 @@ class HomeRangeKDE(object):
         core_cutoff.value = 50
 
         out_cell_size = arcpy.Parameter(
-            displayName="Output cell size",
+            displayName="Analysis cell size",
             name="out_cell_size",
             datatype="analysis_cell_size",
             parameterType="Optional",
@@ -260,7 +260,7 @@ class HomeRangeKDE_Batch(object):
         self.description = '''Batch Home Range Estimation using Kernel Density Estimators. This tool calculates home
         ranges for multiple individuals if observations are stored in one Feature Class.
         '''
-        self.canRunInBackground = False
+        self.canRunInBackground = True
 
     def getParameterInfo(self):
         """Define parameter definitions
@@ -345,7 +345,7 @@ class HomeRangeKDE_Batch(object):
             displayName="Analysis cell size",
             name="out_cell_size",
             datatype="analysis_cell_size",
-            parameterType="Required",
+            parameterType="Optional",
             direction="Output"
         )
 
@@ -467,7 +467,10 @@ class HomeRangeKDE_Batch(object):
             else:
                 barrier_path = None
 
-            out_cell_size = params['out_cell_size'].valueAsText
+            if params['out_cell_size']:
+                out_cell_size = params['out_cell_size'].valueAsText
+            else:
+                out_cell_size = None
             home_cutoff = params['home_cutoff'].valueAsText
             core_cutoff = params['core_cutoff'].valueAsText
             areal_unit = processor.area_unit_lookup(params['area_unit'].valueAsText)
@@ -684,7 +687,7 @@ class HomeRangeMCP_Batch(object):
         """
         self.label = "Batch Home Range Estimation using MCP"
         self.description = "Batch Home Range Estimation using Minimum Convex Polygons"
-        self.canRunInBackground = False
+        self.canRunInBackground = True
 
     def getParameterInfo(self):
         """Define parameter definitions
@@ -959,7 +962,6 @@ class HomeRangeCalc(object):
         # Reclass expression format: min_value max_value RECLASS_VALUE (separated by ;)
         reclass_expression_home = '0 %s NODATA; %s %s %s' % (home_cutoff_value, home_cutoff_value, max_kernel_value, 1)
         reclass_expression_core = '0 %s NODATA; %s %s %s' % (core_cutoff_value, core_cutoff_value, max_kernel_value, 1)
-
 
         home_raster = arcpy.sa.Reclassify(out_raster_path, 'Value', reclass_expression_home, 'DATA')
         core_raster = arcpy.sa.Reclassify(out_raster_path, 'Value', reclass_expression_core, 'DATA')
