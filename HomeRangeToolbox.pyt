@@ -529,7 +529,8 @@ class HomeRangeMCP(object):
         -------
         List of arcpy.Parameter objects
             Parameters are implemented as arcpy.Parameter class, and returned as a list, which will be accessible for the tool.
-        """        self.label = "Home Range Estimation using MCP"
+        """
+        self.label = "Home Range Estimation using MCP"
         self.description = "Home Range Estimation using Minimum Convex Polygons"
         self.canRunInBackground = False
 
