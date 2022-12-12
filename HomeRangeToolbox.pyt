@@ -13,8 +13,11 @@ import os
 import re
 
 class Toolbox(object):
+    """ArcGIS Python Toolbox class. Class names of tools are returned in the `tools` attribute as a list."""
+    
     def __init__(self):
-        """ArcGIS Python Toolbox class."""
+        """ArcGIS Python Toolbox class.
+        """
         self.label = "Home Range Analysis Toolbox"
         self.alias = "HomeRangeAnalysis"
 
@@ -22,9 +25,18 @@ class Toolbox(object):
         self.tools = [HomeRangeKDE, HomeRangeKDE_Batch, HomeRangeMCP, HomeRangeMCP_Batch]
 
 class HomeRangeKDE(object):
-    """Class to represent Home Range Calculations using KDE in a Python toolbox."""
+    """Home Range Calculations using KDE in a Python toolbox. 
+    
+    Attributes
+    ----------
+    canRunInBackground : bool
+        True if Tool can be run in background
+    description : str
+        Expanded description of tool.
+    label : str
+        Label as appears in the GUI.
+    """
     def __init__(self):
-        """Define the tool (tool name is the name of the class)."""
         self.label = "Home Range Estimation using KDE"
         self.description = '''Home Range Estimation using Kernel Density Estimators. This tool calculates home
         ranges for observations stored in a Feature Class.
@@ -32,7 +44,13 @@ class HomeRangeKDE(object):
         self.canRunInBackground = False
 
     def getParameterInfo(self):
-        """Define parameter definitions"""
+        """Define parameter definitions
+        
+        Returns
+        -------
+        List of arcpy.Parameter objects
+            Parameters are implemented as arcpy.Parameter class, and returned as a list, which will be accessible for the tool.
+        """
         observations = arcpy.Parameter(
             displayName="Input observations",
             name="observations",
@@ -97,7 +115,7 @@ class HomeRangeKDE(object):
             displayName="Output cell size",
             name="out_cell_size",
             datatype="analysis_cell_size",
-            parameterType="Required",
+            parameterType="Optional",
             direction="Output"
         )
 
@@ -130,7 +148,12 @@ class HomeRangeKDE(object):
     def updateParameters(self, parameters):
         """Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
-        has been changed."""
+        has been changed.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+        """
 
         if parameters[2].value == 'Manual':
             parameters[3].enabled = True
@@ -138,15 +161,26 @@ class HomeRangeKDE(object):
             parameters[3].enabled = False
         return
 
-        return
-
     def updateMessages(self, parameters):
         """Modify the messages created by internal validation for each tool
-        parameter.  This method is called after internal validation."""
+        parameter.  This method is called after internal validation.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+        """
         return
 
     def execute(self, parameters, messages):
-        """The source code of the tool."""
+        """The source code of the tool.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+            Description
+        messages : TYPE
+            Description
+        """
 
         # Load core functionality
         processor = HomeRangeCalc()
@@ -173,10 +207,13 @@ class HomeRangeKDE(object):
         else:
             barrier_path = None
 
-        out_cell_size = params['out_cell_size'].valueAsText
+        if params['out_cell_size']:
+            out_cell_size = params['out_cell_size'].valueAsText
+        else:
+            out_cell_size = None
         home_cutoff = params['home_cutoff'].valueAsText
         core_cutoff = params['core_cutoff'].valueAsText
-        areal_unit = params['area_unit'].valueAsText
+        areal_unit = processor.area_unit_lookup(params['area_unit'].valueAsText)
 
         if params['radius_method'].valueAsText == 'Reference bandwidth (Silverman 1986)':
             coord_cursor = arcpy.da.SearchCursor(obs_path, ["SHAPE@XY"])
@@ -198,12 +235,27 @@ class HomeRangeKDE(object):
 
     def postExecute(self, parameters):
         """This method takes place after outputs are processed and
-        added to the display."""
+        added to the display.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+        """
         return
 
 class HomeRangeKDE_Batch(object):
+    """Batch Home Range Calculations using KDE in a Python toolbox. 
+    
+    Attributes
+    ----------
+    canRunInBackground : bool
+        True if Tool can be run in background
+    description : str
+        Expanded description of tool.
+    label : str
+        Label as appears in the GUI.
+    """
     def __init__(self):
-        """Define the tool (tool name is the name of the class)."""
         self.label = "Batch Home Range Estimation using KDE"
         self.description = '''Batch Home Range Estimation using Kernel Density Estimators. This tool calculates home
         ranges for multiple individuals if observations are stored in one Feature Class.
@@ -211,7 +263,13 @@ class HomeRangeKDE_Batch(object):
         self.canRunInBackground = False
 
     def getParameterInfo(self):
-        """Define parameter definitions"""
+        """Define parameter definitions
+        
+        Returns
+        -------
+        List of arcpy.Parameter objects
+            Parameters are implemented as arcpy.Parameter class, and returned as a list, which will be accessible for the tool.
+        """
         observations = arcpy.Parameter(
             displayName="Input observations",
             name="observations",
@@ -261,7 +319,7 @@ class HomeRangeKDE_Batch(object):
         )
 
         home_cutoff = arcpy.Parameter(
-            displayName="Home cutoff percentage",
+            displayName="General range cutoff percentage",
             name="home_cutoff",
             datatype="Double",
             parameterType="Required",
@@ -284,7 +342,7 @@ class HomeRangeKDE_Batch(object):
         core_cutoff.value = 50
 
         out_cell_size = arcpy.Parameter(
-            displayName="Output cell size",
+            displayName="Analysis cell size",
             name="out_cell_size",
             datatype="analysis_cell_size",
             parameterType="Required",
@@ -320,7 +378,12 @@ class HomeRangeKDE_Batch(object):
     def updateParameters(self, parameters):
         """Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
-        has been changed."""
+        has been changed.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+        """
 
         if parameters[3].value == 'Manual':
             parameters[4].enabled = True
@@ -330,11 +393,29 @@ class HomeRangeKDE_Batch(object):
 
     def updateMessages(self, parameters):
         """Modify the messages created by internal validation for each tool
-        parameter.  This method is called after internal validation."""
+        parameter.  This method is called after internal validation.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+        """
         return
 
     def execute(self, parameters, messages):
-        """The source code of the tool."""
+        """The source code of the tool.
+        
+        Parameters
+        ----------
+        parameters : TYPE
+            Description
+        messages : TYPE
+            Description
+        
+        Returns
+        -------
+        TYPE
+            Description
+        """
 
         # Load core functionality
         processor = HomeRangeCalc()
@@ -414,18 +495,52 @@ class HomeRangeKDE_Batch(object):
 
     def postExecute(self, parameters):
         """This method takes place after outputs are processed and
-        added to the display."""
+        added to the display.
+        
+        Parameters
+        ----------
+        parameters : TYPE
+            Description
+        
+        Returns
+        -------
+        TYPE
+            Description
+        """
         return
 
 class HomeRangeMCP(object):
+    """Home Range Calculations using MCP in a Python toolbox. 
+    
+    Attributes
+    ----------
+    canRunInBackground : bool
+        True if Tool can be run in background
+    description : str
+        Expanded description of tool.
+    label : str
+        Label as appears in the GUI.
+    """
+    
     def __init__(self):
-        """Define the tool (tool name is the name of the class)."""
-        self.label = "Home Range Estimation using MCP"
+        """Define parameter definitions
+        
+        Returns
+        -------
+        List of arcpy.Parameter objects
+            Parameters are implemented as arcpy.Parameter class, and returned as a list, which will be accessible for the tool.
+        """        self.label = "Home Range Estimation using MCP"
         self.description = "Home Range Estimation using Minimum Convex Polygons"
         self.canRunInBackground = False
 
     def getParameterInfo(self):
-        """Define parameter definitions"""
+        """Define parameter definitions
+        
+        Returns
+        -------
+        List of arcpy.Parameter objects
+            Parameters are implemented as arcpy.Parameter class, and returned as a list, which will be accessible for the tool.
+        """
         observations = arcpy.Parameter(
             displayName="Input observations",
             name="observations",
@@ -488,16 +603,34 @@ class HomeRangeMCP(object):
     def updateParameters(self, parameters):
         """Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
-        has been changed."""
+        has been changed.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+        """
         return
 
     def updateMessages(self, parameters):
         """Modify the messages created by internal validation for each tool
-        parameter.  This method is called after internal validation."""
+        parameter.  This method is called after internal validation.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+        """
         return
 
     def execute(self, parameters, messages):
-        """The source code of the tool."""
+        """The source code of the tool.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+            Description
+        messages : TYPE
+            Description
+        """
         processor = HomeRangeCalc()
 
         arcpy.CheckOutExtension('spatial')
@@ -524,18 +657,41 @@ class HomeRangeMCP(object):
 
     def postExecute(self, parameters):
         """This method takes place after outputs are processed and
-        added to the display."""
+        added to the display.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+        """
         return
 
 class HomeRangeMCP_Batch(object):
+    """Batch Home Range Calculations using MCP in a Python toolbox. 
+    
+    Attributes
+    ----------
+    canRunInBackground : bool
+        True if Tool can be run in background
+    description : str
+        Expanded description of tool.
+    label : str
+        Label as appears in the GUI.
+    """
+    
     def __init__(self):
-        """Define the tool (tool name is the name of the class)."""
+        """Define the tool (tool name is the name of the class).
+        """
         self.label = "Batch Home Range Estimation using MCP"
         self.description = "Batch Home Range Estimation using Minimum Convex Polygons"
         self.canRunInBackground = False
 
     def getParameterInfo(self):
-        """Define parameter definitions"""
+        """Define parameter definitions
+        
+        Returns
+        -------
+        List of arcpy.Parameter    
+        """
         observations = arcpy.Parameter(
             displayName="Input observations",
             name="observations",
@@ -608,16 +764,35 @@ class HomeRangeMCP_Batch(object):
     def updateParameters(self, parameters):
         """Modify the values and properties of parameters before internal
         validation is performed.  This method is called whenever a parameter
-        has been changed."""
+        has been changed.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+        """
         return
 
     def updateMessages(self, parameters):
         """Modify the messages created by internal validation for each tool
-        parameter.  This method is called after internal validation."""
+        parameter.  This method is called after internal validation.
+        
+        Parameters
+        ----------
+        parameters : List of arcpy.Parameter
+            Description
+        """
         return
 
     def execute(self, parameters, messages):
-        """The source code of the tool."""
+        """The source code of the tool.
+        
+        Parameters
+        ----------
+        parameters : TYPE
+            Description
+        messages : TYPE
+            Description
+        """
         processor = HomeRangeCalc()
 
         arcpy.CheckOutExtension('spatial')
@@ -672,12 +847,37 @@ class HomeRangeMCP_Batch(object):
 
     def postExecute(self, parameters):
         """This method takes place after outputs are processed and
-        added to the display."""
+        added to the display.
+        
+        Parameters
+        ----------
+        parameters : TYPE
+            Description
+        
+        Returns
+        -------
+        TYPE
+            Description
+        """
         return
 
 class HomeRangeCalc(object):
-    """Class that contains methods needed to calculate home ranges."""
+    """Class that contains methods to calculate home ranges."""
     def area_unit_lookup(self, unit):
+        """Summary
+        
+        Parameters
+        ----------
+        unit : str
+            Pretty unit of area calculation from GUI dropdown. Value is one of `Square meters`, `Square kilometers`, `Hectares`
+            `Square feet (int)` (international feet, not US), `Square miles (int)` (international miles, not US) or
+            `Acres`.
+        
+        Returns
+        -------
+        str
+            Standardized value of area unit passed on to ArcGIS methods.
+        """
         units = {
                 "Square meters": "SQUARE_METERS",
                 "Square kilometers": "SQUARE_KILOMETERS",
@@ -688,12 +888,13 @@ class HomeRangeCalc(object):
         }
         return units[unit]
 
-    def compute_kde(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius, home_cutoff, core_cutoff, areal_unit, iteration):
-        """Implements Kernel Density Estimation
-
+    def compute_kde(self, arcpy, point_fc, suffix, barrier_features, cell_size, search_radius, home_cutoff, core_cutoff, areal_unit, iteration=0):
+        """Implements Kernel Density Estimation. The method calls various built-in ArcGIS tools, to generate a continuous
+            surface of kernel densities, to reclassify this surface into core and home areas and to convert areas to polygons.
+        
         If the argument `suffix` is None, the method is called from the HomeRangeKDE function. If `suffix` is set,
         the HomeRangeKDE_Batch Tool is being used.
-
+        
         Parameters
         ----------
         arcpy : module
@@ -703,7 +904,7 @@ class HomeRangeCalc(object):
         suffix : str, optional
             Unique animal ID. Used when iterating through individuals stored in the same input file. Called
             from a loop that iterates over unique animal IDs.
-        barrier_features: str, optional
+        barrier_features : str, optional
             Path to a Feature Class with barriers.
         cell_size
             Spatial resolution of output KDE raster.
@@ -713,6 +914,10 @@ class HomeRangeCalc(object):
             Cutoff percentage value to determine home range. Values must be between 0 and 100. Default is 95%.
         core_cutoff : double
             Cutoff percentage value to determine core area. Values must be between 0 and 100. Default is 50%.
+        areal_unit : str
+            Standardized area unit as str (see `area_unit_lookup` function.)
+        iteration : integer
+            To keep track if function is called from within a loop.
         """
 
         # Build KDE raster
@@ -821,21 +1026,29 @@ class HomeRangeCalc(object):
         # Order distances, discard points for home and core
         # Calculate MCP with points
 
-    def compute_mcp(self, arcpy, point_fc, suffix, home_cutoff, core_cutoff, areal_unit, iteration):
-        """Summary
+    def compute_mcp(self, arcpy, point_fc, suffix, home_cutoff, core_cutoff, areal_unit, iteration=0):
+        """Implements home range extraction using Minimum Convex Polygons. The method calls various built-in ArcGIS tools
+        
+        If the argument `suffix` is None, the method is called from the HomeRangeKDE function. If `suffix` is set,
+        the HomeRangeKDE_Batch Tool is being used.
         
         Parameters
         ----------
-        arcpy : TYPE
-            Description
-        point_fc : TYPE
-            Description
-        suffix : TYPE
-            Description
-        home_cutoff : TYPE
-            Description
-        core_cutoff : TYPE
-            Description
+        arcpy : module
+            arcpy module that contains environmental settings and ArcGIS functionality to be called.
+        point_fc : str
+            Path to a point Feature Class that contains point observations. Type must be Point or MultiPoint
+        suffix : str, optional
+            Unique animal ID. Used when iterating through individuals stored in the same input file. Called
+            from a loop that iterates over unique animal IDs.
+        home_cutoff : double
+            Cutoff percentage value to determine home range. Values must be between 0 and 100. Default is 95%.
+        core_cutoff : double
+            Cutoff percentage value to determine core area. Values must be between 0 and 100. Default is 50%.
+        areal_unit : str
+            Standardized area unit as str (see `area_unit_lookup` function.)
+        iteration : integer
+            To keep track if function is called from within a loop.
         """
         central = r'central_feature.shp'
         dist_raster = r'distance.tif'
@@ -918,10 +1131,25 @@ class HomeRangeCalc(object):
             arcpy.management.Delete(point_fc)     
 
 
-    # This function extracts lists of x and y coordinates from a search cursor,
-    # then returns and optimized bandwidth value for those observations
-    # based on XXX
     def calculate_reference_bandwidth(self, search_cursor):
+        """This function extracts lists of x and y coordinates from a search cursor,
+            then returns and optimized bandwidth value for those observations
+    
+
+            Implementes the 2D version of Silverman's rule of thumb [1].
+
+            [1] Silverman, B. W. Density Estimation for Statistics and Data Analysis. New York: Chapman and Hall, 1986.
+        
+        Parameters
+        ----------
+        search_cursor : arcpy.SearchCursor
+            Search cursor initialized to return `"SHAPE@XY"` of point observations.
+        
+        Returns
+        -------
+        h_ref : float
+            Reference bandwidth based on Silverman's Rule of Thumb. Unit is map units.
+        """
         import math
         import statistics
 
@@ -955,6 +1183,23 @@ class HomeRangeCalc(object):
         return h
 
     def calculate_lscv_bandwidth(self, search_cursor):
+        """This function implements optimal bandwidth selection based on Least Squares Cross Validation, which minimizes
+            the Mean Integrated Square Error (MISE).
+    
+            Based on [1].
+
+            [1] Seaman D.E. and Powell, R.A. (1996) An evaluation of the accuracy of kernel density estimators for home range analysis. Ecology, 77, 2075-2085. doi:10.2307/2265701
+        
+        Parameters
+        ----------
+        search_cursor : arcpy.SearchCursor
+            Search cursor initialized to return `"SHAPE@XY"` of point observations.
+        
+        Returns
+        -------
+        h_value : float
+            LSCV bandwidth based on Seaman & Powell 1996.
+        """
         from scipy.spatial import distance_matrix
         import numpy as np
         import math
@@ -974,13 +1219,16 @@ class HomeRangeCalc(object):
         n = len(x_list)
 
         search_cursor.reset()
+
         h_ref = self.calculate_reference_bandwidth(search_cursor)
-        min_h = h_ref * 0.1
-        max_h = h_ref * 2
+        #arcpy.AddMessage('ref bandwidth: %s' % h_ref)
+        min_h = h_ref * 0.01
+        max_h = h_ref * 4
 
         step = (max_h - min_h) / ITER
 
         value_range = [min_h + step * x for x in list(range(0,ITER+1))]
+        #arcpy.AddMessage('value_range: %s' % str(value_range))
 
         f = distance_matrix(coords, coords)
         f = np.tril(f, k=-1) # keep lower triangle, no diagonal
@@ -989,12 +1237,16 @@ class HomeRangeCalc(object):
 
         res = []
         for h in value_range:
-            out = sum(numpy.exp(-f_flat * f_flat / (4 * h * h)) - 4 * numpy.exp(-f_flat * f_flat / (2 * h * h)))
-            x = 1.0 / (math.pi * h * h * n) + (2 * out - 3 * n)/(math.pi * 4.0 * h * h * n * n)
+            out = sum(numpy.exp(-f_flat ** 2 / (4.0 * h ** 2)) - 4.0 * numpy.exp(-f_flat ** 2 / (2.0 * h ** 2)))
+            x = 1.0 / (math.pi * h ** 2.0 * n) + (2.0 * out - 3.0 * n)/(math.pi * 4.0 * h ** 2 * n ** 2)
             res.append(x)
 
-        res = numpy.array(res)
-        h_value = value_range[res.argmin()]
+        arcpy.AddMessage(str(res))
+        min_x = min(res)
+        min_idx = res.index(min_x)
+        #res = numpy.array(res)
+
+        h_value = value_range[min_idx]
         return h_value
 
 
